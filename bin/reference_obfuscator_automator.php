@@ -1,0 +1,98 @@
+#!/usr/bin/php
+<?php
+//----------------------------------------------------------------------------------------------------------------------
+//use SetBased\Abc\Obfuscator\ReferenceObfuscatorAutomator;
+
+use SetBased\Abc\Obfuscator\ReferenceObfuscatorAutomator;
+
+require_once("ReferenceObfuscatorAutomator.php"); // xxx replace with use namespace
+
+//----------------------------------------------------------------------------------------------------------------------
+$files = [__DIR__.'/../vendor/autoload.php',
+          __DIR__.'/../../vendor/autoload.php',
+          __DIR__.'/../../../vendor/autoload.php',
+          __DIR__.'/../../../../vendor/autoload.php'];
+
+foreach ($files as $file)
+{
+  if (file_exists($file))
+  {
+    require $file;
+    break;
+  }
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Parses the arguments of this program.
+ *
+ * @param array $options The arguments of this programs (i.e. $argv).
+ *
+ * @return array  The parameters.
+ * @throws Exception
+ */
+function getSetting($options)
+{
+  // skip first key with current file name.
+  array_shift($options);
+  while (($param = array_shift($options))!==null)
+  {
+    switch ($param)
+    {
+      case '-c':
+      case '--config':
+        $setting['config'] = array_shift($options);
+        break;
+    }
+  }
+
+  if (!isset($setting['config']))
+    print_r("Configuration file are empty.");
+
+  return $setting;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+/**
+ * Returns the error string of the last json_encode() or json_decode() call.
+ *
+ * json_last_error_msg is defined in php 5.5.
+ */
+if (!function_exists('json_last_error_msg'))
+{
+  function json_last_error_msg()
+  {
+    static $errors = [
+      JSON_ERROR_NONE           => null,
+      JSON_ERROR_DEPTH          => 'Maximum stack depth exceeded',
+      JSON_ERROR_STATE_MISMATCH => 'Underflow or the modes mismatch',
+      JSON_ERROR_CTRL_CHAR      => 'Unexpected control character found',
+      JSON_ERROR_SYNTAX         => 'Syntax error, malformed JSON',
+      JSON_ERROR_UTF8           => 'Malformed UTF-8 characters, possibly incorrectly encoded'
+    ];
+    $error = json_last_error();
+
+    return array_key_exists($error, $errors) ? $errors[$error] : "Unknown error ({$error})";
+  }
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+/**
+ * Starts the execution of this program.
+ *
+ * @param array $options The arguments of this programs (i.e. $argv).
+ */
+function main($options)
+{
+  $setting = getSetting($options);
+
+  $constants = new ReferenceObfuscatorAutomator();
+  $ret       = $constants->main($setting['config']);
+  if ($ret!=0) exit($ret);
+
+  exit(0);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+main($argv);
