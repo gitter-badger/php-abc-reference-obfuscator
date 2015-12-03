@@ -35,6 +35,9 @@
     "phpdocumentor/reflection-docblock": "2.*",
     "setbased/abc": "*"
   },
+  "bin": [
+    "bin/reference_obfuscator_automator"
+  ],
   "autoload": {
     "psr-4": {
       "SetBased\\Abc\\": "src/"
@@ -43,9 +46,6 @@
   "config": {
     "bin-dir": "bin",
     "component-dir": "vendor/components"
-  },
-  "config": {
-    "bin-dir": "bin"
   }
 }
 
