@@ -43,6 +43,9 @@
   "config": {
     "bin-dir": "bin",
     "component-dir": "vendor/components"
+  },
+  "config": {
+    "bin-dir": "bin"
   }
 }
 
