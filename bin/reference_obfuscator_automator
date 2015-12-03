@@ -1,11 +1,7 @@
 #!/usr/bin/php
 <?php
 //----------------------------------------------------------------------------------------------------------------------
-//use SetBased\Abc\Obfuscator\ReferenceObfuscatorAutomator;
-
 use SetBased\Abc\Obfuscator\ReferenceObfuscatorAutomator;
-
-require_once("ReferenceObfuscatorAutomator.php"); // xxx replace with use namespace
 
 //----------------------------------------------------------------------------------------------------------------------
 $files = [__DIR__.'/../vendor/autoload.php',
@@ -23,7 +19,6 @@ foreach ($files as $file)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-
 /**
  * Parses the arguments of this program.
  *
@@ -89,9 +84,8 @@ function main($options)
 
   $constants = new ReferenceObfuscatorAutomator();
   $ret       = $constants->main($setting['config']);
-  if ($ret!=0) exit($ret);
 
-  exit(0);
+  exit($ret);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

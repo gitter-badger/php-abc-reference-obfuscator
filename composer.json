@@ -1,0 +1,48 @@
+{
+  "name": "setbased/abc-reference-obfuscator",
+  "description": "ABC-ReferenceObfuscator",
+  "type": "library",
+  "keyword": [
+    "ABC",
+    "Reference",
+    "Obfuscator",
+    "Database",
+    "ID"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Set Based IT Consultancy",
+      "email": "info@setbased.nl",
+      "homepage": "http://www.setbased.nl"
+    }
+  ],
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://packagist.setbased.nl/"
+    }
+  ],
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require-dev": {
+    "setbased/abc-phing": "*",
+    "setbased/phing-extensions": "1.*",
+    "setbased/php-stratum": "*"
+  },
+  "require": {
+    "php": ">=5.4.0",
+    "phpdocumentor/reflection-docblock": "2.*",
+    "setbased/abc": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "SetBased\\Abc\\": "src/"
+    }
+  },
+  "config": {
+    "bin-dir": "bin",
+    "component-dir": "vendor/components"
+  }
+}
+

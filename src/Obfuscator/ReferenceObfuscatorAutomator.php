@@ -2,54 +2,54 @@
 //----------------------------------------------------------------------------------------------------------------------
 namespace SetBased\Abc\Obfuscator;
 
-use SetBased\Stratum\Exception\RuntimeException;
+use SetBased\Abc\Error\RuntimeException;
 use SetBased\Stratum\MySql\StaticDataLayer;
 use SetBased\Stratum\Util;
 
 //----------------------------------------------------------------------------------------------------------------------
 /**
- * Class for creating PHP variable based on column widths, and auto increment columns and labels.
+ * Class for creating parameters for reference obfuscator.
  */
 class ReferenceObfuscatorAutomator
 {
   //--------------------------------------------------------------------------------------------------------------------.
   /**
-   * All config file as array.
+   * The configuration parameters.
    *
    * @var array
    */
   private $myConfig;
 
   /**
-   * Config file name.
+   * The fielname of the configuration filename.
    *
    * @var string
    */
   private $myConfigFileName;
 
   /**
-   * All IDs.
+   * Metadat of all auto increment columns.
    *
-   * @var array
+   * @var array[]
    */
   private $myDatabaseIds;
 
   /**
-   * Array of types with length
+   * Number of bytes of MySQL integer types.
    *
    * @var array
    */
-  private $myTypes = ['tinyint'   => 1,
-                      'smallint'  => 2,
-                      'mediumint' => 3,
-                      'int'       => 4,
-                      'bigint'    => 8];
+  private $myIntegerTypeSizes = ['tinyint'   => 1,
+                                 'smallint'  => 2,
+                                 'mediumint' => 3,
+                                 'int'       => 4,
+                                 'bigint'    => 8];
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Main function for read,create and write constants.
+   * Main function for read, create and write constants.
    *
-   * @param string $theConfigFilename
+   * @param string $theConfigFilename The name of the configuration file.
    *
    * @return int
    */
@@ -59,7 +59,7 @@ class ReferenceObfuscatorAutomator
 
     $this->readConfigFile($theConfigFilename);
 
-    $this->getDatabseIDs();
+    $this->getDatabaseIds();
 
     $this->generateConstants();
 
@@ -72,31 +72,31 @@ class ReferenceObfuscatorAutomator
   /**
    * Reads configuration parameters from the configuration file.
    *
-   * @param string $theConfigFilename
+   * @param string $theConfigFilename The name of the configuration file.
    *
-   * @throws \SetBased\Abc\Error\RuntimeException
+   * @throws RuntimeException
    */
   protected function readConfigFile($theConfigFilename)
   {
     $content = file_get_contents($theConfigFilename);
     if ($content===false)
     {
-      throw new \SetBased\Abc\Error\RuntimeException("Unable to read file '%s'.", $theConfigFilename);
+      throw new RuntimeException("Unable to read file '%s'.", $theConfigFilename);
     }
     $this->myConfig = json_decode($content, true);
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Searches for 3 lines in the source code of the class for constants. The lines are:
+   * Searches for 3 lines in the source code with reference obfuscator parameters. The lines are:
    * * The first line of the doc block with the annotation '@setbased.abc.obfuscator'.
    * * The last line of this doc block.
-   * * The last line of continuous constant declarations directly after the doc block.
+   * * The last line of array declarations directly after the doc block.
    * If one of these line can not be found the line number will be set to null.
    *
-   * @param string $theSourceCode The source code of the constant class.
+   * @param string $theSourceCode The source code of the PHP file.
    *
-   * @return array With the 3 line number as described
+   * @return array With the 3 line numbers as described.
    */
   private function extractLines($theSourceCode)
   {
@@ -144,7 +144,7 @@ class ReferenceObfuscatorAutomator
           break;
 
         case 3:
-          // Step 4: Find en of constants declarations.
+          // Step 4: Find en of array declaration.
           if (is_string($token))
           {
             if ($token==']' && $tokens[$key + 1]==';')
@@ -171,7 +171,7 @@ class ReferenceObfuscatorAutomator
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Create constants for each database id.
+   * Create array declaration ($length, $key, $mask) for each database ID.
    */
   private function generateConstants()
   {
@@ -179,10 +179,10 @@ class ReferenceObfuscatorAutomator
     {
       if (!in_array($row["table_name"], $this->myConfig['ignore']))
       {
-        $length                           = $this->myTypes[$row['data_type']];
-        $key                              = rand(1, pow(2, 16) - 1);
-        $mask                             = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
-        $name                             = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
+        $length                             = $this->myIntegerTypeSizes[$row['data_type']];
+        $key                                = rand(1, pow(2, 16) - 1);
+        $mask                               = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
+        $name                               = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
         $this->myConfig['constants'][$name] = [$length, $key, $mask];
       }
     }
@@ -191,9 +191,9 @@ class ReferenceObfuscatorAutomator
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Load database IDs .
+   * Retrieves metadata about the auto increment columns.
    */
-  private function getDatabseIDs()
+  private function getDatabaseIds()
   {
     $database = $this->myConfig['database'];
     $query    = "
@@ -211,7 +211,7 @@ order by table_name";
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Create lines for each database id from constans.
+   * Returns an array declaration for the reference obfuscator.
    *
    * @return array
    */
@@ -230,23 +230,23 @@ order by table_name";
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Write new data to config file.
+   * Saves the configuration data to the configuration file.
    */
   private function rewriteConfig()
   {
-    Util::writeTwoPhases($this->myConfigFileName, json_encode($this->myConfig));
+    Util::writeTwoPhases($this->myConfigFileName, json_encode($this->myConfig, JSON_PRETTY_PRINT));
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Insert new and replace old (if any) constant declaration statements in a PHP source file.
+   * Insert new and replace old (if any) array declaration for reference obfuscator in a PHP source file.
    */
   private function writeConstant()
   {
     $source = file_get_contents($this->myConfig['file']);
     if ($source===false)
     {
-      throw new RuntimeException("Unable the open source file '%s'.", $this->myConfig['file']);
+      throw new RuntimeException("Unable the open file '%s'.", $this->myConfig['file']);
     }
     $source_lines = explode("\n", $source);
 
@@ -261,8 +261,8 @@ order by table_name";
     $constants = $this->makeVariableStatements();
 
     // Insert new and replace old (if any) constant declaration statements.
-    $tmp1 = array_splice($source_lines, 0, $line_numbers[1]);
-    $tmp2 = array_splice($source_lines, (isset($line_numbers[2])) ? $line_numbers[2] - $line_numbers[1] : 0);
+    $tmp1         = array_splice($source_lines, 0, $line_numbers[1]);
+    $tmp2         = array_splice($source_lines, (isset($line_numbers[2])) ? $line_numbers[2] - $line_numbers[1] : 0);
     $source_lines = array_merge($tmp1, $constants, $tmp2);
 
     // Save the file.
