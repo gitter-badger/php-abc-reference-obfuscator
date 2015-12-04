@@ -21,7 +21,7 @@ interface ReferenceObfuscatorMangler
    *
    * @return string
    */
-  public function getLabel($theTable);
+  public static function getLabel($theTable);
 
   //-------------------------------------------------------------------------------------------------------------------
 }
