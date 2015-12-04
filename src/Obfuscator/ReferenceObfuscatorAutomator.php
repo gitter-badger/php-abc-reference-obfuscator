@@ -182,7 +182,7 @@ class ReferenceObfuscatorAutomator
         $name = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
         if (!array_key_exists($name, $this->myConfig['constants']))
         {
-          $length                             = $this->myTypes[$row['data_type']];
+          $length                             = $this->myIntegerTypeSizes[$row['data_type']];
           $key                                = rand(1, pow(2, 16) - 1);
           $mask                               = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
           $this->myConfig['constants'][$name] = [$length, $key, $mask];
