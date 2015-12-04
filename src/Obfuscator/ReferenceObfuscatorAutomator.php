@@ -184,7 +184,8 @@ class ReferenceObfuscatorAutomator
         if (!isset($this->myConfig['constants'][$label]))
         {
           // Key and mask is not yet defined for $label. Generate key and mask.
-          echo "Generation key and mask for label '$label'.\n";
+          echo "Generating key and mask for label '$label'.\n";
+          
           $length                              = $this->myIntegerTypeSizes[$table['data_type']];
           $key                                 = rand(1, pow(2, 16) - 1);
           $mask                                = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
