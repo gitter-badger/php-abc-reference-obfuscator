@@ -1,0 +1,98 @@
+<project name="OnzeRrelaties" default="build" basedir=".">
+    <taskdef name="readSemanticVersion" classname="vendor.setbased.phing-extensions.src.Task.readSemanticVersionTask"/>
+    <property name="VERSION" value="0.0.0"/>
+    <property name="RELEASE" value="0.0.0"/>
+    <property name="PRE_RELEASE" value=""/>
+
+    <!-- Runs ApiGen -->
+    <target name="apigen">
+        <exec command="apigen generate --todo --tree --source src --destination doc/api" passthru="true"
+              checkreturn="true"/>
+    </target>
+
+    <!-- Runs all unit tests -->
+    <target name="unit">
+        <exec command="bin/phpunit --bootstrap=test/bootstrap.php test" passthru="true" checkreturn="true"/>
+    </target>
+
+    <!-- Optimize images. Must run manually when new images are added in the source tree. -->
+    <target name="optimize_image">
+        <apply executable="optipng" passthru="true" checkreturn="true">
+            <arg value="-preserve"/>
+            <arg value="-o7"/>
+            <fileset dir=".">
+                <include name="www/images/**/*.png"/>
+                <include name="share/**/*.png"/>
+                <exclude name="build/**"/>
+            </fileset>
+        </apply>
+    </target>
+
+    <!-- Merges the current branch with a remote branch -->
+    <target name="git-merge">
+        <exec command="git rev-parse --abbrev-ref HEAD" outputProperty="CURRENT_BRANCH"/>
+        <input message="Your current branch is '${CURRENT_BRANCH}'. Remote branch: " propertyName="BRANCH"/>
+        <gitbranch branchname="temp" repository="."/>
+        <gitcheckout repository="." branchname="temp"/>
+        <gitpull repository="." refspec="${BRANCH}" quiet="false"/>
+        <gitcheckout repository="." branchname="${CURRENT_BRANCH}"/>
+        <gitmerge repository="." remote="temp"/>
+        <gitbranch branchname="temp" repository="." delete="true"/>
+    </target>
+
+    <!-- Merges the current branch with a remote branch in two steps: step 1 -->
+    <target name="git-merge1">
+        <exec command="git rev-parse --abbrev-ref HEAD" outputProperty="CURRENT_BRANCH" checkreturn="true"/>
+        <exec command="git fetch -p" passthru="true" checkreturn="true"/>
+        <input message="Your current branch is '${CURRENT_BRANCH}'. Remote branch: " propertyName="BRANCH"/>
+        <gitbranch branchname="temp" repository="."/>
+        <gitcheckout repository="." branchname="temp"/>
+        <gitpull repository="." refspec="${BRANCH}" quiet="false"/>
+    </target>
+
+    <!-- Merges the current branch with a remote branch in two steps: step 2 -->
+    <target name="git-merge2">
+        <exec command="git rev-parse --abbrev-ref HEAD" outputProperty="CURRENT_BRANCH" checkreturn="true"/>
+        <input message="Your current branch is '${CURRENT_BRANCH}'. Branch: " propertyName="BRANCH"/>
+        <gitcheckout repository="." branchname="${BRANCH}"/>
+        <gitmerge repository="." remote="temp"/>
+        <gitbranch branchname="temp" repository="." delete="true"/>
+    </target>
+
+    <!-- Creates a new version/release. -->
+    <target name="version">
+        <readSemanticVersion file=".version"
+                             versionProperty="VERSION"
+                             releaseProperty="RELEASE"
+                             preReleaseProperty="PRE_RELEASE"
+                             haltOnError="true"/>
+
+        <if>
+            <equals arg1="${PRE_RELEASE}" arg2=""/>
+            <then>
+                <property name="RPM_RELEASE" value="1%{?dist}"/>
+            </then>
+            <else>
+                <property name="RPM_RELEASE" value="${PRE_RELEASE}%{?dist}"/>
+            </else>
+        </if>
+
+        <reflexive>
+            <fileset dir=".">
+                <include name="onzerelaties.spec"/>
+            </fileset>
+            <filterchain>
+                <replaceregexp>
+                    <regexp pattern="Version: .*" replace="Version: ${RELEASE}"/>
+                    <regexp pattern="Release: .*" replace="Release: ${RPM_RELEASE}"/>
+                </replaceregexp>
+            </filterchain>
+        </reflexive>
+        <gitcommit repository="." message="Release: ${VERSION}" allFiles="true"/>
+        <gitpush repository="."/>
+        <gittag repository="." name="${VERSION}"/>
+        <gitpush repository="." refspec="${VERSION}" quiet="false"/>
+    </target>
+
+    <target name="build"/>
+</project>

@@ -28,11 +28,11 @@ class ReferenceObfuscatorAutomator
   private $myConfigFileName;
 
   /**
-   * Metadat of all auto increment columns.
+   * Metadata of all tables with auto increment columns.
    *
    * @var array[]
    */
-  private $myDatabaseIds;
+  private $myTables;
 
   /**
    * Number of bytes of MySQL integer types.
@@ -175,21 +175,25 @@ class ReferenceObfuscatorAutomator
    */
   private function generateConstants()
   {
-    foreach ($this->myDatabaseIds as $row)
+    foreach ($this->myTables as $table)
     {
-      if (!in_array($row["table_name"], $this->myConfig['ignore']))
+      // Skip the table is the table must be ignored.
+      if (!in_array($table["table_name"], $this->myConfig['ignore']))
       {
-        $name = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
-        if (!array_key_exists($name, $this->myConfig['constants']))
+        $label = substr($table["column_name"], 0, strlen($table["column_name"]) - 3);
+        if (!isset($this->myConfig['constants'][$label]))
         {
-          $length                             = $this->myIntegerTypeSizes[$row['data_type']];
-          $key                                = rand(1, pow(2, 16) - 1);
-          $mask                               = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
-          $this->myConfig['constants'][$name] = [$length, $key, $mask];
+          // Key and mask is not yet defined for $label. Generate key and mask.
+          echo "Generation key and mask for label '$label'.\n";
+          $length                              = $this->myIntegerTypeSizes[$table['data_type']];
+          $key                                 = rand(1, pow(2, 16) - 1);
+          $mask                                = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
+          $this->myConfig['constants'][$label] = [$length, $key, $mask];
         }
       }
     }
-    ksort($this->myConfig['constants']);
+
+    // Save the configuration file.
     $this->rewriteConfig();
   }
 
@@ -199,7 +203,6 @@ class ReferenceObfuscatorAutomator
    */
   private function getDatabaseIds()
   {
-    $database = $this->myConfig['database'];
     $query    = "
 select table_name
 ,      column_name
@@ -208,14 +211,19 @@ from       information_schema.columns
 where table_schema = database()
 and   extra        = 'auto_increment'
 order by table_name";
-    StaticDataLayer::connect($database['host_name'], $database['user_name'], $database['password'], $database['database_name']);
-    $this->myDatabaseIds = StaticDataLayer::executeRows($query);
+
+    $database = $this->myConfig['database'];
+    StaticDataLayer::connect($database['host_name'],
+                             $database['user_name'],
+                             $database['password'],
+                             $database['database_name']);
+    $this->myTables = StaticDataLayer::executeRows($query);
     StaticDataLayer::disconnect();
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Returns an array declaration for the reference obfuscator.
+   * Returns PHP snippet with an array declaration for reference obfuscator.
    *
    * @return array
    */
@@ -238,6 +246,9 @@ order by table_name";
    */
   private function rewriteConfig()
   {
+    // Sort array with labels, keys and masks by label.
+    ksort($this->myConfig['constants']);
+
     Util::writeTwoPhases($this->myConfigFileName, json_encode($this->myConfig, JSON_PRETTY_PRINT));
   }
 
