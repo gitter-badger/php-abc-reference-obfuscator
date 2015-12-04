@@ -179,13 +179,17 @@ class ReferenceObfuscatorAutomator
     {
       if (!in_array($row["table_name"], $this->myConfig['ignore']))
       {
-        $length                             = $this->myIntegerTypeSizes[$row['data_type']];
-        $key                                = rand(1, pow(2, 16) - 1);
-        $mask                               = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
-        $name                               = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
-        $this->myConfig['constants'][$name] = [$length, $key, $mask];
+        $name = substr($row["column_name"], 0, strlen($row["column_name"]) - 3);
+        if (!array_key_exists($name, $this->myConfig['constants']))
+        {
+          $length                             = $this->myTypes[$row['data_type']];
+          $key                                = rand(1, pow(2, 16) - 1);
+          $mask                               = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
+          $this->myConfig['constants'][$name] = [$length, $key, $mask];
+        }
       }
     }
+    ksort($this->myConfig['constants']);
     $this->rewriteConfig();
   }
 
