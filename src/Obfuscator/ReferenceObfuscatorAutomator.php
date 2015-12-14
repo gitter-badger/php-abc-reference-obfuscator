@@ -10,7 +10,7 @@ use SetBased\Stratum\Util;
 /**
  * Class for creating parameters for reference obfuscator.
  */
-class ReferenceObfuscatorAutomator
+class ReferenceObfuscatorAutomator implements ReferenceObfuscatorMangler
 {
   //--------------------------------------------------------------------------------------------------------------------.
   /**
@@ -39,11 +39,11 @@ class ReferenceObfuscatorAutomator
    *
    * @var array
    */
-  private $myIntegerTypeSizes = ['tinyint'   => 1,
-                                 'smallint'  => 2,
-                                 'mediumint' => 3,
-                                 'int'       => 4,
-                                 'bigint'    => 8];
+  private static $myIntegerTypeSizes = ['tinyint'   => 1,
+                                        'smallint'  => 2,
+                                        'mediumint' => 3,
+                                        'int'       => 4,
+                                        'bigint'    => 8];
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
@@ -180,16 +180,12 @@ class ReferenceObfuscatorAutomator
       // Skip the table is the table must be ignored.
       if (!in_array($table["table_name"], $this->myConfig['ignore']))
       {
-        $label = substr($table["column_name"], 0, strlen($table["column_name"]) - 3);
-        if (!isset($this->myConfig['constants'][$label]))
+        if (!isset($this->myConfig['constants'][$table["table_name"]]))
         {
           // Key and mask is not yet defined for $label. Generate key and mask.
-          echo "Generating key and mask for label '$label'.\n";
+          print_r("Generating key and mask for label '{$table["table_name"]}'.\n");
 
-          $length                              = $this->myIntegerTypeSizes[$table['data_type']];
-          $key                                 = rand(1, pow(2, 16) - 1);
-          $mask                                = rand(pow(2, 8 * $length - 1), pow(2, 8 * $length) - 1);
-          $this->myConfig['constants'][$label] = [$length, $key, $mask];
+          $this->myConfig['constants'][$table["table_name"]] = $this->getLabel($table);
         }
       }
     }
@@ -204,7 +200,7 @@ class ReferenceObfuscatorAutomator
    */
   private function getDatabaseIds()
   {
-    $query    = "
+    $query = "
 select table_name
 ,      column_name
 ,      data_type
@@ -224,16 +220,39 @@ order by table_name";
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
+   * Compares .... xxxx
+   *
+   * @param $a
+   * @param $b
+   *
+   * @return int
+   */
+  public static function compare($a, $b)
+  {
+    if (strtolower($a['label'])==strtolower($b['label']))
+      return 0;
+
+    return (strtolower($a['label'])>strtolower($b['label'])) ? 1 : -1;
+  }
+
+  //--------------------------------------------------------------------------------------------------------------------
+  /**
    * Returns PHP snippet with an array declaration for reference obfuscator.
    *
    * @return array
+   * @throws \BuildException
    */
   private function makeVariableStatements()
   {
+    // Sort constants by label.
+    $sort_result = uasort($this->myConfig['constants'], '\\SetBased\\Abc\\Obfuscator\\ReferenceObfuscatorAutomator::compare');
+    if ($sort_result==false)
+      throw new \BuildException("Sorting failed");
+
     $variable = "[\n";
     foreach ($this->myConfig['constants'] as $key => $value)
     {
-      $variable .= sprintf("  \"%s\" => [%s, %s, %s],\n", $key, $value[0], $value[1], $value[2]);
+      $variable .= sprintf("  '%s' => [%s, %s, %s],\n", $value["label"], $value["size"], $value["key"], $value["mask"]);
     }
     $variable .= ']';
     $constants[] = sprintf("%s = %s;", $this->myConfig['variable'], $variable, true);
@@ -286,6 +305,27 @@ order by table_name";
   }
 
   //--------------------------------------------------------------------------------------------------------------------
+  /**
+   * Returns the label of a table based on the metadata of the table.
+   *
+   * @param array $theTable The metadata of the table. The array has the following keys:
+   *                        <ul>
+   *                        <li> table_name   The name of the table.
+   *                        <li> column_name  The name of the autoincrement column.
+   *                        <li> column_type  The data type of the autoincrement column.
+   *                        </ul>
+   *
+   * @return array
+   */
+  public static function getLabel($theTable)
+  {
+    $size  = self::$myIntegerTypeSizes[$theTable['data_type']];
+    $key   = rand(1, pow(2, 16) - 1);
+    $mask  = rand(pow(2, 8 * $size - 1), pow(2, 8 * $size) - 1);
+    $label = substr($theTable["column_name"], 0, strlen($theTable["column_name"]) - 3);
+
+    return ['label' => $label, 'size' => $size, 'key' => $key, 'mask' => $mask];
+  }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
