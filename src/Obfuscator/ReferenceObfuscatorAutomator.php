@@ -10,7 +10,7 @@ use SetBased\Stratum\Util;
 /**
  * Class for creating parameters for reference obfuscator.
  */
-class ReferenceObfuscatorAutomator implements ReferenceObfuscatorMangler
+class ReferenceObfuscatorAutomator
 {
   //--------------------------------------------------------------------------------------------------------------------.
   /**
@@ -39,11 +39,11 @@ class ReferenceObfuscatorAutomator implements ReferenceObfuscatorMangler
    *
    * @var array
    */
-  private static $myIntegerTypeSizes = ['tinyint'   => 1,
-                                        'smallint'  => 2,
-                                        'mediumint' => 3,
-                                        'int'       => 4,
-                                        'bigint'    => 8];
+  private $myIntegerTypeSizes = ['tinyint'   => 1,
+                                 'smallint'  => 2,
+                                 'mediumint' => 3,
+                                 'int'       => 4,
+                                 'bigint'    => 8];
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
@@ -178,20 +178,55 @@ class ReferenceObfuscatorAutomator implements ReferenceObfuscatorMangler
     foreach ($this->myTables as $table)
     {
       // Skip the table is the table must be ignored.
-      if (!in_array($table["table_name"], $this->myConfig['ignore']))
+      if (!in_array($table['table_name'], $this->getConfig('ignore')))
       {
-        if (!isset($this->myConfig['constants'][$table["table_name"]]))
+        if (!isset($this->getConfig('constants')[$table['table_name']]))
         {
           // Key and mask is not yet defined for $label. Generate key and mask.
-          print_r("Generating key and mask for label '{$table["table_name"]}'.\n");
+          echo "Generating key and mask for label '{$table['table_name']}'.\n";
 
-          $this->myConfig['constants'][$table["table_name"]] = $this->getLabel($table);
+          $size  = $this->myIntegerTypeSizes[$table['data_type']];
+          $key   = rand(1, pow(2, 16) - 1);
+          $mask  = rand(pow(2, 8 * $size - 1), pow(2, 8 * $size) - 1);
+          $class = $this->getConfig('mangler');
+          if (!isset($class))
+            throw new \BuildException('Mangler does not set');
+          $label = $class::getLabel($table);
+          $check = $this->uniqueLabel($label);
+          if ($check===true)
+            $this->myConfig['constants'][$table['table_name']] = ['label' => $label,
+                                                                  'size'  => $size,
+                                                                  'key'   => $key,
+                                                                  'mask'  => $mask];
+          else
+            throw new \BuildException("Constants array have two same labels in '{$table['table_name']}' and '{$check}' tables.");
         }
+      }
+
+      // Save the configuration file.
+      $this->rewriteConfig();
+    }
+  }
+
+  //--------------------------------------------------------------------------------------------------------------------
+  /**
+   * Check unique label in constants array
+   *
+   * @param string $theLabel
+   *
+   * @return bool
+   */
+  private function uniqueLabel($theLabel)
+  {
+    foreach ($this->myConfig['constants'] as $key => $constant)
+    {
+      if ($constant['label']===$theLabel)
+      {
+        return $key;
       }
     }
 
-    // Save the configuration file.
-    $this->rewriteConfig();
+    return true;
   }
 
   //--------------------------------------------------------------------------------------------------------------------
@@ -209,7 +244,9 @@ where table_schema = database()
 and   extra        = 'auto_increment'
 order by table_name";
 
-    $database = $this->myConfig['database'];
+    $database = $this->getConfig('database');
+    if (!isset($database['host_name'], $database['user_name'], $database['password'], $database['database_name']))
+      throw new \BuildException('Incorrect config for database connection');
     StaticDataLayer::connect($database['host_name'],
                              $database['user_name'],
                              $database['password'],
@@ -220,7 +257,24 @@ order by table_name";
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Compares .... xxxx
+   * Get variable from config by key.
+   *
+   * @param string $key
+   * @param array  $config Content from config file.
+   *
+   * @return mixed
+   */
+  private function getConfig($key, $config = null)
+  {
+    if ($config===null)
+      return $this->myConfig[$key];
+
+    return $config[$key];
+  }
+
+  //--------------------------------------------------------------------------------------------------------------------
+  /**
+   * Compares labels from array for sorting.
    *
    * @param $a
    * @param $b
@@ -250,12 +304,12 @@ order by table_name";
       throw new \BuildException("Sorting failed");
 
     $variable = "[\n";
-    foreach ($this->myConfig['constants'] as $key => $value)
+    foreach ($this->getConfig('constants') as $value)
     {
-      $variable .= sprintf("  '%s' => [%s, %s, %s],\n", $value["label"], $value["size"], $value["key"], $value["mask"]);
+      $variable .= sprintf("  '%s' => [%s, %s, %s],\n", $value['label'], $value['size'], $value['key'], $value['mask']);
     }
     $variable .= ']';
-    $constants[] = sprintf("%s = %s;", $this->myConfig['variable'], $variable, true);
+    $constants[] = sprintf("%s = %s;", $this->getConfig('variable'), $variable, true);
 
     return $constants;
   }
@@ -278,10 +332,10 @@ order by table_name";
    */
   private function writeConstant()
   {
-    $source = file_get_contents($this->myConfig['file']);
+    $source = file_get_contents($this->getConfig('file'));
     if ($source===false)
     {
-      throw new RuntimeException("Unable the open file '%s'.", $this->myConfig['file']);
+      throw new RuntimeException("Unable the open file '%s'.", $this->getConfig('file'));
     }
     $source_lines = explode("\n", $source);
 
@@ -289,7 +343,7 @@ order by table_name";
     $line_numbers = $this->extractLines($source);
     if (!isset($line_numbers[0]))
     {
-      throw new RuntimeException("Annotation not found in '%s'.", $this->myConfig['file']);
+      throw new RuntimeException("Annotation not found in '%s'.", $this->getConfig('file'));
     }
 
     // Generate the variable statements.
@@ -301,31 +355,11 @@ order by table_name";
     $source_lines = array_merge($tmp1, $constants, $tmp2);
 
     // Save the file.
-    Util::writeTwoPhases($this->myConfig['file'], implode("\n", $source_lines));
+    Util::writeTwoPhases($this->getConfig('file'), implode("\n", $source_lines));
   }
 
   //--------------------------------------------------------------------------------------------------------------------
-  /**
-   * Returns the label of a table based on the metadata of the table.
-   *
-   * @param array $theTable The metadata of the table. The array has the following keys:
-   *                        <ul>
-   *                        <li> table_name   The name of the table.
-   *                        <li> column_name  The name of the autoincrement column.
-   *                        <li> column_type  The data type of the autoincrement column.
-   *                        </ul>
-   *
-   * @return array
-   */
-  public static function getLabel($theTable)
-  {
-    $size  = self::$myIntegerTypeSizes[$theTable['data_type']];
-    $key   = rand(1, pow(2, 16) - 1);
-    $mask  = rand(pow(2, 8 * $size - 1), pow(2, 8 * $size) - 1);
-    $label = substr($theTable["column_name"], 0, strlen($theTable["column_name"]) - 3);
 
-    return ['label' => $label, 'size' => $size, 'key' => $key, 'mask' => $mask];
-  }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
