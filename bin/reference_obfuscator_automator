@@ -83,10 +83,21 @@ function main($options)
   $setting = getSetting($options);
 
   $constants = new ReferenceObfuscatorAutomator();
-  $ret       = $constants->main($setting['config']);
-
-  exit($ret);
+  $constants->main($setting['config']);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-main($argv);
+try
+{
+  main($argv);
+
+  exit(0);
+}
+catch (Exception $e)
+{
+  echo 'Error: ', $e->getMessage(), "\n\n";
+
+  echo $e->getTraceAsString();
+
+  exit(-1);
+}

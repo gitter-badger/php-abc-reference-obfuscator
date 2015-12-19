@@ -21,18 +21,11 @@ class ReferenceObfuscatorAutomator
   private $myConfig;
 
   /**
-   * The fielname of the configuration filename.
+   * The name of the configuration file.
    *
    * @var string
    */
   private $myConfigFileName;
-
-  /**
-   * Metadata of all tables with auto increment columns.
-   *
-   * @var array[]
-   */
-  private $myTables;
 
   /**
    * Number of bytes of MySQL integer types.
@@ -44,6 +37,32 @@ class ReferenceObfuscatorAutomator
                                  'mediumint' => 3,
                                  'int'       => 4,
                                  'bigint'    => 8];
+
+  /**
+   * Metadata of all tables with auto increment columns.
+   *
+   * @var array[]
+   */
+  private $myTables;
+
+  //--------------------------------------------------------------------------------------------------------------------
+  /**
+   * Compares obfuscator metadata for sorting.
+   *
+   * @param $a
+   * @param $b
+   *
+   * @return int
+   */
+  public static function compare($a, $b)
+  {
+    if (strtolower($a['label'])==strtolower($b['label']))
+    {
+      return 0;
+    }
+
+    return (strtolower($a['label'])>strtolower($b['label'])) ? 1 : -1;
+  }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
@@ -64,8 +83,6 @@ class ReferenceObfuscatorAutomator
     $this->generateConstants();
 
     $this->writeConstant();
-
-    return 0;
   }
 
   //--------------------------------------------------------------------------------------------------------------------
@@ -89,9 +106,11 @@ class ReferenceObfuscatorAutomator
   //--------------------------------------------------------------------------------------------------------------------
   /**
    * Searches for 3 lines in the source code with reference obfuscator parameters. The lines are:
-   * * The first line of the doc block with the annotation '@setbased.abc.obfuscator'.
-   * * The last line of this doc block.
-   * * The last line of array declarations directly after the doc block.
+   * <ul>
+   * <li> The first line of the doc block with the annotation '@setbased.abc.obfuscator'.
+   * <li> The last line of this doc block.
+   * <li> The last line of array declarations directly after the doc block.
+   * </ul>
    * If one of these line can not be found the line number will be set to null.
    *
    * @param string $theSourceCode The source code of the PHP file.
@@ -171,67 +190,100 @@ class ReferenceObfuscatorAutomator
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Create array declaration ($length, $key, $mask) for each database ID.
+   * Creates array declaration ($length, $key, $mask) for each database ID.
    */
   private function generateConstants()
   {
+    // Get the tables to ignore.
+    $ignore = $this->getConfig('ignore', false);
+
+    // Get constants already defined.
+    $defined = $this->getConfig('constants', true);
+
+    // Get class for deriving the label from table metadata.
+    $mangler = $this->getConfig('mangler', true);
+
     foreach ($this->myTables as $table)
     {
       // Skip the table is the table must be ignored.
-      if (!in_array($table['table_name'], $this->getConfig('ignore')))
+      if (!in_array($table['table_name'], $ignore))
       {
-        if (!isset($this->getConfig('constants')[$table['table_name']]))
+        if (!isset($defined[$table['table_name']]))
         {
           // Key and mask is not yet defined for $label. Generate key and mask.
           echo "Generating key and mask for label '{$table['table_name']}'.\n";
 
-          $size  = $this->myIntegerTypeSizes[$table['data_type']];
-          $key   = rand(1, pow(2, 16) - 1);
-          $mask  = rand(pow(2, 8 * $size - 1), pow(2, 8 * $size) - 1);
-          $class = $this->getConfig('mangler');
-          if (!isset($class))
-            throw new \BuildException('Mangler does not set');
-          $label = $class::getLabel($table);
-          $check = $this->uniqueLabel($label);
-          if ($check===true)
-            $this->myConfig['constants'][$table['table_name']] = ['label' => $label,
-                                                                  'size'  => $size,
-                                                                  'key'   => $key,
-                                                                  'mask'  => $mask];
-          else
-            throw new \BuildException("Constants array have two same labels in '{$table['table_name']}' and '{$check}' tables.");
+          $size = $this->myIntegerTypeSizes[$table['data_type']];
+          $key  = rand(1, pow(2, 16) - 1);
+          $mask = rand(pow(2, 8 * $size - 1), pow(2, 8 * $size) - 1);
+
+          $label = $mangler::getLabel($table);
+          $other = $this->getTableByLabel($label);
+          if ($other)
+          {
+            throw new RuntimeException("Tables '%s' and '%s' have the same label '%s'.",
+                                       $table['table_name'],
+                                       $other,
+                                       $label);
+          }
+
+          $this->myConfig['constants'][$table['table_name']] = ['label' => $label,
+                                                                'size'  => $size,
+                                                                'key'   => $key,
+                                                                'mask'  => $mask];
         }
       }
-
-      // Save the configuration file.
-      $this->rewriteConfig();
     }
+
+    // Save the configuration file.
+    $this->rewriteConfig();
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Check unique label in constants array
+   * Gets variable from config by path.
    *
-   * @param string $theLabel
+   * @param string $thePath          The forward slash separated path of the variable.
+   * @param bool   $theMandatoryFlag If set the variable is mandatory and when the variable is not set an exception
+   *                                 will be thrown.
    *
-   * @return bool
+   * @return mixed
    */
-  private function uniqueLabel($theLabel)
+  private function getConfig($thePath, $theMandatoryFlag = true)
   {
-    foreach ($this->myConfig['constants'] as $key => $constant)
+    $ret  = null;
+    $keys = explode('/', $thePath);
+
+    $config = $this->myConfig;
+    foreach ($keys as $key)
     {
-      if ($constant['label']===$theLabel)
+      if (!isset($config[$key]))
       {
-        return $key;
+        // If the config variable is mandatory throw a runtime exception.
+        if ($theMandatoryFlag)
+        {
+          throw new RuntimeException("Variable '%s' not set in configuration file '%s'",
+                                     $thePath,
+                                     $this->myConfigFileName);
+        }
+
+        // Otherwise, leave the loop.
+        $ret = null;
+        break;
+      }
+      else
+      {
+        $config = $config[$key];
+        $ret    = $config;
       }
     }
 
-    return true;
+    return $ret;
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Retrieves metadata about the auto increment columns.
+   * Retrieves metadata about tables with autoincrement columns.
    */
   private function getDatabaseIds()
   {
@@ -244,49 +296,33 @@ where table_schema = database()
 and   extra        = 'auto_increment'
 order by table_name";
 
-    $database = $this->getConfig('database');
-    if (!isset($database['host_name'], $database['user_name'], $database['password'], $database['database_name']))
-      throw new \BuildException('Incorrect config for database connection');
-    StaticDataLayer::connect($database['host_name'],
-                             $database['user_name'],
-                             $database['password'],
-                             $database['database_name']);
+    StaticDataLayer::connect($this->getConfig('database/host_name'),
+                             $this->getConfig('database/user_name'),
+                             $this->getConfig('database/password'),
+                             $this->getConfig('database/database_name'));
     $this->myTables = StaticDataLayer::executeRows($query);
     StaticDataLayer::disconnect();
   }
 
   //--------------------------------------------------------------------------------------------------------------------
   /**
-   * Get variable from config by key.
+   * Searches for a table name based on a label.
    *
-   * @param string $key
-   * @param array  $config Content from config file.
+   * @param string $theLabel The label to search for.
    *
-   * @return mixed
+   * @return string The table name of the table with  the label, null if no tabel with the label exists.
    */
-  private function getConfig($key, $config = null)
+  private function getTableByLabel($theLabel)
   {
-    if ($config===null)
-      return $this->myConfig[$key];
+    foreach ($this->myConfig['constants'] as $table_name => $constant)
+    {
+      if ($constant['label']==$theLabel)
+      {
+        return $table_name;
+      }
+    }
 
-    return $config[$key];
-  }
-
-  //--------------------------------------------------------------------------------------------------------------------
-  /**
-   * Compares labels from array for sorting.
-   *
-   * @param $a
-   * @param $b
-   *
-   * @return int
-   */
-  public static function compare($a, $b)
-  {
-    if (strtolower($a['label'])==strtolower($b['label']))
-      return 0;
-
-    return (strtolower($a['label'])>strtolower($b['label'])) ? 1 : -1;
+    return null;
   }
 
   //--------------------------------------------------------------------------------------------------------------------
@@ -299,9 +335,11 @@ order by table_name";
   private function makeVariableStatements()
   {
     // Sort constants by label.
-    $sort_result = uasort($this->myConfig['constants'], '\\SetBased\\Abc\\Obfuscator\\ReferenceObfuscatorAutomator::compare');
+    $sort_result = uasort($this->myConfig['constants'], __CLASS__.'::compare');
     if ($sort_result==false)
-      throw new \BuildException("Sorting failed");
+    {
+      throw new RuntimeException("Sorting failed");
+    }
 
     $variable = "[\n";
     foreach ($this->getConfig('constants') as $value)
