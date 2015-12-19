@@ -211,7 +211,7 @@ class ReferenceObfuscatorAutomator
         if (!isset($defined[$table['table_name']]))
         {
           // Key and mask is not yet defined for $label. Generate key and mask.
-          echo "Generating key and mask for label '{$table['table_name']}'.\n";
+          echo "Generating key and mask for table '{$table['table_name']}'.\n";
 
           $size = $this->myIntegerTypeSizes[$table['data_type']];
           $key  = rand(1, pow(2, 16) - 1);
