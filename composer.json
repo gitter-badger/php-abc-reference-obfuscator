@@ -10,24 +10,12 @@
     "ID"
   ],
   "license": "MIT",
-  "authors": [
-    {
-      "name": "Set Based IT Consultancy",
-      "email": "info@setbased.nl",
-      "homepage": "http://www.setbased.nl"
-    }
-  ],
-  "repositories": [
-    {
-      "type": "composer",
-      "url": "https://packagist.setbased.nl/"
-    }
-  ],
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require-dev": {
+    "phpunit/phpunit": "*",
     "setbased/abc-phing": "*",
-    "setbased/phing-extensions": "1.*",
+    "setbased/phing-extensions": "2.*",
     "setbased/php-stratum": "*"
   },
   "require": {
